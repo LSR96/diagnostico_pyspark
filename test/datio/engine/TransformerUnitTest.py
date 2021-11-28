@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 from minsait.ttaa.datio.engine.Transformer import Transformer
 import unittest
 
@@ -42,7 +42,6 @@ class TransformerUnitTest(unittest.TestCase):
         print("Se terminó la prueba")
         self.assertEquals(Transformer(spark).column_selection(df2), df)
         #falta subir cambios
-=======
 from minsait.ttaa.datio.engine.Transformer import Transformer
 import unittest
 
@@ -86,4 +85,3 @@ class TransformerUnitTest(unittest.TestCase):
         print("Se terminó la prueba")
         self.assertEquals(Transformer(spark).column_selection(df2), df)
         #falta subir cambios
->>>>>>> 2c29d6b80c07224b026ea5627e2936478b8e4713

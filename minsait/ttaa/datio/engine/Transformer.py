@@ -1,38 +1,36 @@
 import pyspark.sql.functions as f
-import os
 from pyspark.sql import SparkSession, WindowSpec, Window, DataFrame, Column
 
 from minsait.ttaa.datio.common.Constants import *
 from minsait.ttaa.datio.common.naming.PlayerInput import *
 from minsait.ttaa.datio.common.naming.PlayerOutput import *
-from minsait.ttaa.datio.common.naming.Valuecondition import *
+from minsait.ttaa.datio.common.naming.ValueCondition import *
 from minsait.ttaa.datio.utils.Writer import Writer
 
 
 class Transformer(Writer):
     def __init__(self, spark: SparkSession):
         self.spark: SparkSession = spark
+
+    def procesar(self):
         df: DataFrame = self.read_input()
         df.printSchema()
         df = self.clean_data(df)
-#        df = self.example_window_function(df)
-#       Código antiguo{
-#        df = self.column_selection(df)
-#       }Código antiguo
-#       Código nuevo{
-        df = self.filter_players(df, 1)
-        df = self.column_selection_prueba(df)
+        # Ejercicio 5
+        df = self.filter_players(df)
+        # Ejercicio 1
+        df = self.column_selection(df)
+        # Ejercicio 2
         df = self.new_column_player_cat(df)
+        # Ejercicio 3
         df = self.new_column_potential_vs_overall(df)
+        # Ejercicio 4
         df = self.filter_player_cat_and_potential_vs_overall(df)
-        self.write_with_partitionby(df)
-#       }Código nuevo
 
-        # for show 100 records after your transformations and show the DataFrame schema
-        df.show(n=100, truncate=False)
-        df.printSchema()
+        # Visualizamos los primeros 5000 registros
+        df.show(n=200, truncate=False)
 
-        # Uncomment when you want write your final output
+        # Creación de parquet
         self.write(df)
 
     def read_input(self) -> DataFrame:
@@ -61,42 +59,7 @@ class Transformer(Writer):
     def column_selection(self, df: DataFrame) -> DataFrame:
         """
         :param df: is a DataFrame with players information
-        :return: a DataFrame with just 5 columns...
-        """
-        df = df.select(
-            short_name.column(),
-            overall.column(),
-            height_cm.column(),
-            team_position.column(),
-            catHeightByPosition.column()
-        )
-        return df
-
-    def example_window_function(self, df: DataFrame) -> DataFrame:
-        """
-        :param df: is a DataFrame with players information (must have team_position and height_cm columns)
-        :return: add to the DataFrame the column "cat_height_by_position"
-             by each position value
-             cat A for if is in 20 players tallest
-             cat B for if is in 50 players tallest
-             cat C for the rest
-        """
-        w: WindowSpec = Window \
-            .partitionBy(team_position.column()) \
-            .orderBy(height_cm.column().desc())
-        rank: Column = f.rank().over(w)
-
-        rule: Column = f.when(rank < 10, "A") \
-            .when(rank < 50, "B") \
-            .otherwise("C")
-
-        df = df.withColumn(player_cat.name, rule)
-        return df
-
-    def column_selection_prueba(self, df: DataFrame) -> DataFrame:
-        """
-        :param df: is a DataFrame with players information
-        :return: a DataFrame with just 5 columns...
+        :return: un DataFrame con las columnas short_name, long_name, age, height_cm, weight_kg, nationality, club_name, overall, potential, team_position
         """
         df = df.select(
             short_name.column(),
@@ -109,18 +72,17 @@ class Transformer(Writer):
             overall.column(),
             potential.column(),
             team_position.column()
-    #        catHeightByPosition.column()
         )
         return df
 
     def new_column_player_cat(self, df: DataFrame) -> DataFrame:
         """
         :param df: is a DataFrame with players information (must have team_position and height_cm columns)
-        :return: add to the DataFrame the column "cat_height_by_position"
-             by each position value
-             cat A for if is in 20 players tallest
-             cat B for if is in 50 players tallest
-             cat C for the rest
+        :return: agrega al DataFrame la columna "player_cat"
+            A si el jugador es de los mejores 3 jugadores en su posición de su país.
+            B si el jugador es de los mejores 5 jugadores en su posición de su país.
+            C si el jugador es de los mejores 10 jugadores en su posición de su país.
+            D para el resto de jugadores
         """
         w: WindowSpec = Window \
             .partitionBy(nationality.column(), team_position.column()) \
@@ -139,11 +101,8 @@ class Transformer(Writer):
     def new_column_potential_vs_overall(self, df: DataFrame) -> DataFrame:
         """
         :param df: is a DataFrame with players information (must have team_position and height_cm columns)
-        :return: add to the DataFrame the column "cat_height_by_position"
-             by each position value
-             cat A for if is in 20 players tallest
-             cat B for if is in 50 players tallest
-             cat C for the rest
+        :return: Agregaremos una columna potential_vs_overall con la siguiente regla:
+                 Columna potential dividida por la columna overall
         """
         df = df.withColumn(potential_vs_overall.name, potential.column()/overall.column())
         return df
@@ -151,27 +110,23 @@ class Transformer(Writer):
     def filter_player_cat_and_potential_vs_overall(self, df: DataFrame) -> DataFrame:
         """
         :param df: is a DataFrame with players information (must have team_position and height_cm columns)
-        :return: add to the DataFrame the column "cat_height_by_position"
-             by each position value
-             cat A for if is in 20 players tallest
-             cat B for if is in 50 players tallest
-             cat C for the rest
+        :return: Filtraremos de acuerdo a las columnas player_cat y potential_vs_overall con las siguientes condiciones:
+                    Si player_cat esta en los siguientes valores: A, B
+                    Si player_cat es C y potential_vs_overall es superior a 1.15
+                    Si player_cat es D y potential_vs_overall es superior a 1.25
+
         """
-        li = ["A", "B"]
-        df = df.filter((player_cat.column().isin(li) == True)
-                       | ((player_cat.column() == "C") & (potential_vs_overall.column() > 1.15))
-                       | ((player_cat.column() == "D") & (potential_vs_overall.column() > 1.25)))
+
+        df = df.filter((player_cat.column().isin(CAT_AB) == True)
+                       | ((player_cat.column() == CAT_C) & (potential_vs_overall.column() > 1.15))
+                       | ((player_cat.column() == CAT_D) & (potential_vs_overall.column() > 1.25)))
         return df
 
-    def filter_players(self, df: DataFrame, condition: int) -> DataFrame:
+    def filter_players(self, df: DataFrame) -> DataFrame:
         """
         :param df: is a DataFrame with players information (must have team_position and height_cm columns)
-        :return: add to the DataFrame the column "cat_height_by_position"
-             by each position value
-             cat A for if is in 20 players tallest
-             cat B for if is in 50 players tallest
-             cat C for the rest
+        :return: Si la condición de filtrado de jugadores = 1 realice todos los pasos únicamente para los jugadores menores de 23 años
         """
-        if condition == 1:
+        if CONDITION_FILTER_PLAYERS == 1:
             df = df.filter((age.column() < 23))
         return df

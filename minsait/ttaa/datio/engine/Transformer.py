@@ -1,4 +1,5 @@
 import pyspark.sql.functions as f
+import os
 from pyspark.sql import SparkSession, WindowSpec, Window, DataFrame, Column
 
 from minsait.ttaa.datio.common.Constants import *
@@ -11,11 +12,12 @@ from minsait.ttaa.datio.utils.Writer import Writer
 class Transformer(Writer):
     def __init__(self, spark: SparkSession):
         self.spark: SparkSession = spark
+        df: DataFrame = self.read_input()
+        df = self.clean_data(df)
+        self.df = df
 
     def procesar(self):
-        df: DataFrame = self.read_input()
-        df.printSchema()
-        df = self.clean_data(df)
+        df = self.df
         # Ejercicio 5
         df = self.filter_players(df)
         # Ejercicio 1
@@ -40,7 +42,7 @@ class Transformer(Writer):
         return self.spark.read \
             .option(INFER_SCHEMA, True) \
             .option(HEADER, True) \
-            .csv(INPUT_PATH)
+            .csv(os.getcwd() + INPUT_PATH)
 
     def clean_data(self, df: DataFrame) -> DataFrame:
         """
